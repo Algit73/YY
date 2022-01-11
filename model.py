@@ -1,17 +1,21 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Dense, Flatten, Conv1D, MaxPooling1D, Dropout
+from tensorflow.keras.layers import Input, Dense, Flatten, Conv1D, MaxPooling1D
 from tensorflow.keras import backend as K
-from icecream import ic
+
+tf.compat.v1.disable_eager_execution() # usually using this for fastest performance
 
 
 class Shared_Model:
     def __init__(self, input_shape, action_space, learning_rate, optimizer):
+        
+        
         X_input = Input(input_shape)
         self.action_space = action_space
-        
-        
+
+
+
         ### CNN Model
         V = Conv1D(filters=64, kernel_size=6, padding="same", activation="tanh")(X_input)
         V = MaxPooling1D(pool_size=2)(V)
@@ -19,7 +23,6 @@ class Shared_Model:
         V = MaxPooling1D(pool_size=2)(V)
         V = Flatten()(V)
 
-        
         value = Dense(1, activation=None)(V)
         self.Critic = Model(inputs=X_input, outputs = value) # value --> X
         self.Critic.compile(loss=self.critic_PPO2_loss, optimizer=optimizer(learning_rate=learning_rate))
@@ -28,7 +31,6 @@ class Shared_Model:
 
         ## Actor model
         ### CNN Model
-        dropout_layer = Dropout(.1)
         A = Conv1D(filters=64, kernel_size=6, padding="same", activation="tanh")(X_input)
         A = MaxPooling1D(pool_size=2)(A)
         A = Conv1D(filters=32, kernel_size=3, padding="same", activation="tanh")(A)
@@ -36,13 +38,13 @@ class Shared_Model:
         A = Flatten()(A)
 
         output = Dense(self.action_space, activation="softmax")(A) # A --> X
-        
+       
 
         self.Actor = Model(inputs = X_input, outputs = output) 
         self.Actor.compile(loss=self.ppo_loss, optimizer=optimizer(learning_rate=learning_rate))
-        
 
     def ppo_loss(self, y_true, y_pred):
+        # Defined in https://arxiv.org/abs/1707.06347
         advantages, prediction_picks, actions = y_true[:, :1], y_true[:, 1:1+self.action_space], y_true[:, 1+self.action_space:]
         LOSS_CLIPPING = 0.2
         ENTROPY_LOSS = 0.001
