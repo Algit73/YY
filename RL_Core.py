@@ -1,6 +1,6 @@
 from datetime import datetime
 from utils import TradingGraph
-from model import Shared_Model
+from model import CNN_Model
 from tensorflow.keras.optimizers import Adam, RMSprop
 from collections import deque
 import random
@@ -9,18 +9,22 @@ import pandas as pd
 import copy
 import os
 from icecream import ic
+from tensorflow.keras import backend as K
+
+
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 HOLD, BUY, SELL = 0, 1, 2
 
 
-class CustomAgent:
+class PPO_Agent:
     # A custom Bitcoin trading agent
-    def __init__(self, lookback_window_size=50, learning_rate=0.00005, epochs=1, optimizer=Adam, batch_size=32, model="", state_size=10):
+    def __init__(self, lookback_window_size=50, learning_rate=0.00005, epochs=1, optimizer=Adam, batch_size=32, state_size=10):
         self.lookback_window_size = lookback_window_size
-        self.model = model
+        
 
         # Action space from 0 to 3, 0 is hold, 1 is buy, 2 is sell
         self.action_space = np.array([0, 1, 2])
+        self.action_space_size = len(self.action_space)
 
         # folder to save models
         self.log_name = datetime.now().strftime("%Y_%m_%d_%H_%M")+"_Crypto_trader"
@@ -40,23 +44,17 @@ class CustomAgent:
         self.batch_size = batch_size
 
         # Create shared Actor-Critic network model
-        self.Actor = self.Critic = Shared_Model(
-            input_shape=self.state_size, action_space=self.action_space.shape[0], learning_rate=self.learning_rate, optimizer=self.optimizer)
+        self.Actor = self.Critic = CNN_Model(input_shape=self.state_size,
+                                             action_space=len(self.action_space),
+                                             learning_rate=self.learning_rate,
+                                             optimizer=self.optimizer,
+                                             critic_loss="mse",
+                                             actor_loss=self.actor_ppo_loss)
 
         # Variables to keep the folder name and file name
-        self.folder_name = ""
         self.file_name = ""
 
         self.replay_count = 0
-
-    def get_folder_name(self):
-        ic(self.log_name)
-        return self.log_name
-
-    def end_training_log(self):
-        with open(self.log_name+"/Parameters.txt", "a+") as params:
-            current_date = datetime.now().strftime('%Y-%m-%d %H:%M')
-            params.write(f"training end: {current_date}\n")
 
     def get_gaes(self, rewards, dones, values, next_values, gamma=0.99, lamda=0.95, normalize=True):
         deltas = [r + gamma * (1 - d) * nv - v for r, d,
@@ -140,17 +138,36 @@ class CustomAgent:
                     atgumets += f", {arg}"
                 log.write(f"{current_time}{atgumets}\n")
 
-    def get_file_name(self):
-        ic(self.file_name)
-        return self.file_name
-
     def load(self, folder, name):
         # load keras model weights
         self.Actor.Actor.load_weights(os.path.join(folder, f"{name}_Actor.h5"))
         self.Critic.Critic.load_weights(
             os.path.join(folder, f"{name}_Critic.h5"))
 
+    def actor_ppo_loss(self, y_true, y_pred):
+        advantages, prediction_picks, actions = y_true[:, :1], y_true[:, 1:1+self.action_space_size], y_true[:, 1+self.action_space_size:]
+        LOSS_CLIPPING = 0.2
+        ENTROPY_LOSS = 0.001
+        
+        prob = actions * y_pred
+        old_prob = actions * prediction_picks
 
+        prob = K.clip(prob, 1e-10, 1.0)
+        old_prob = K.clip(old_prob, 1e-10, 1.0)
+
+        ratio = K.exp(K.log(prob) - K.log(old_prob))
+        
+        p1 = ratio * advantages
+        p2 = K.clip(ratio, min_value=1 - LOSS_CLIPPING, max_value=1 + LOSS_CLIPPING) * advantages
+
+        actor_loss = -K.mean(K.minimum(p1, p2))
+
+        entropy = -(y_pred * K.log(y_pred + 1e-10))
+        entropy = ENTROPY_LOSS * K.mean(entropy)
+        
+        total_loss = actor_loss - entropy
+
+        return total_loss
 class CustomEnv:
     # A custom Bitcoin trading environment
     def __init__(self, df, initial_balance=1000, lookback_window_size=50, Render_range=100, Show_reward=False, Show_indicators=False, normalize_value=40000):
@@ -363,7 +380,7 @@ class CustomEnv:
             return img
 
 
-def train_agent(env, agent: CustomAgent, visualize=False, explore_mode=True,
+def train_agent(env, agent: PPO_Agent, visualize=False, explore_mode=True,
                 train_episodes=50, training_batch_size=500):
 
     # save n recent (maxlen=n) episodes net worth
@@ -461,8 +478,8 @@ if __name__ == "__main__":
 
     # Training Section:
     train_df = df[:-test_window-lookback_window_size]
-    agent = CustomAgent(lookback_window_size=lookback_window_size,
-                        learning_rate=0.0001, epochs=5, optimizer=Adam, batch_size=24, model="Dense", state_size=10+3)
+    agent = PPO_Agent(lookback_window_size=lookback_window_size,
+                      learning_rate=0.0001, epochs=5, optimizer=Adam, batch_size=24, state_size=10+3)
 
     train_env = CustomEnv(train_df, lookback_window_size=lookback_window_size)
     train_agent(train_env, agent, visualize=False, explore_mode=False,
