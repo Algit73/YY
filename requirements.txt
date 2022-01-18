@@ -1,8 +1,8 @@
-mplfinance==0.12.8b6
-numpy==1.21.4
-pandas==1.3.4
-matplotlib==3.4.2
-ta==0.8.0
-icecream==2.1.1
-opencv_python==4.5.3.56
-tensorflow==2.6.0
+pandas
+numpy
+tensorflow
+icecream
+matplotlib
+opencv_python
+ta
+mplfinance

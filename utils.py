@@ -129,7 +129,7 @@ class TradingGraph:
 
     # Render the environment to the screen
     # def render(self, Date, Open, High, Low, Close, Volume, net_worth, trades):
-    def render(self, df, net_worth, trades):
+    def render(self, df, net_worth, trades , last_step):
         Date = df["date"]
         Open = df["open"]
         High = df["high"]
@@ -145,6 +145,8 @@ class TradingGraph:
         self.render_data.append([Date, Open, High, Low, Close])
 
         # Clear the frame rendered last step
+        if not last_step :
+            return
         self.ax1.clear()
         candlestick_ohlc(self.ax1, self.render_data, width=0.3/24,
                          colorup='green', colordown='red', alpha=0.8)
@@ -221,14 +223,8 @@ class TradingGraph:
 
         # display image with OpenCV or any operation you like
         cv2.imshow("Bitcoin trading bot", image)
-
-        if cv2.waitKey(25) & 0xFF == ord("q"):
-            cv2.destroyAllWindows()
-            return
-        else:
-            current_date = datetime.now().strftime('%Y-%m-%d %H:%M')
-
-            return
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
 
 def Plot_OHCL(df):

@@ -1,3 +1,5 @@
 *.ini
 *.pyc
 .vscode/launch.json
+*.h5
+*/log.txt

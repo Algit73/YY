@@ -63,7 +63,7 @@ def train_agent(env, agent: PPO_Agent, visualize=False, explore_mode=True,
     agent.end_training_log()
 
 
-def test_agent(env, agent, visualize=True, test_episodes=10, explore_mode=False,
+def test_agent(env: CustomEnv, agent: PPO_Agent, visualize=True, test_episodes=10, explore_mode=False,
                folder="", name="Crypto_trader", comment=""):
     agent.load(folder, name)
     average_net_worth = 0
@@ -72,9 +72,10 @@ def test_agent(env, agent, visualize=True, test_episodes=10, explore_mode=False,
     for episode in range(test_episodes):
         state = env.reset()
         while True:
-            env.render(visualize and (episode == (test_episodes-1)))
             action, prediction = agent.act(state, explore_mode)
             state, reward, done = env.step(action)
+            is_last_step = (episode == (test_episodes-1))
+            env.render(visualize and is_last_step, env.current_step == env.end_step)
             if env.current_step == env.end_step:
                 average_net_worth += env.net_worth
                 average_orders += env.episode_orders
@@ -88,14 +89,6 @@ def test_agent(env, agent, visualize=True, test_episodes=10, explore_mode=False,
     print("average {} episodes agent net_worth: {}, orders: {}".format(
         test_episodes, average_net_worth/test_episodes, average_orders/test_episodes))
     print("No profit episodes: {}".format(no_profit_episodes))
-    # save test results to test_results.txt file
-    with open("test_results.txt", "a+") as results:
-        current_date = datetime.now().strftime('%Y-%m-%d %H:%M')
-        results.write(f'{current_date}, {name}, test episodes:{test_episodes}')
-        results.write(
-            f', net worth:{average_net_worth/(episode+1)}, orders per episode:{average_orders/test_episodes}')
-        results.write(
-            f', no profit episodes:{no_profit_episodes}, model: {agent.model}, comment: {comment}\n')
 
 
 if __name__ == "__main__":
@@ -108,19 +101,21 @@ if __name__ == "__main__":
     test_window = 24 * 20    # 30 days
 
     # Training Section:
-    train_df = df[:-test_window-lookback_window_size]
     agent = PPO_Agent(CustomEnv, lookback_window_size=lookback_window_size,
                       learning_rate=0.0001, epochs=5, optimizer=Adam, batch_size=24, state_size=10+3)
 
-    train_env = CustomEnv(train_df, lookback_window_size=lookback_window_size)
-    train_agent(train_env, agent, visualize=False, explore_mode=False,
-                train_episodes=3000, training_batch_size=2000)
+    TESTING = True
 
-    # Testing Section:
-    # test_df = df[-test_window:-test_window + 180]
-    test_df = df[-test_window:]
-    ic(test_df[['open', 'close']])   # Depicting the specified Time-period
-    # test_env = CustomEnv(test_df, lookback_window_size=lookback_window_size,
-    #                      Show_reward=True, Show_indicators=True)
-    # test_agent(test_env, agent, visualize=False, test_episodes=30,explore_mode=False,
-    #            folder="2022_01_10_18_14_Crypto_trader", name="1472.41_Crypto_trader", comment="")
+    if not TESTING:
+        train_df = df[:-test_window-lookback_window_size]
+        train_env = CustomEnv(train_df, lookback_window_size=lookback_window_size)
+        train_agent(train_env, agent, visualize=False, explore_mode=False,
+                    train_episodes=3000, training_batch_size=2000)
+
+    else:
+        # test_df = df[-test_window:-test_window + 180]
+        test_df = df[-test_window:]
+        test_env = CustomEnv(test_df, lookback_window_size=lookback_window_size,
+                             Show_reward=True, Show_indicators=True)
+        test_agent(test_env, agent, visualize=True, test_episodes=3, explore_mode=False,
+                   folder="2022_01_17_19_37_Crypto_trader", name="1281.12_Crypto_trader", comment="")

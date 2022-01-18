@@ -62,6 +62,7 @@ class CustomEnv(Env):
         self.rewards = deque(maxlen=self.Render_range)
         self.env_steps_size = env_steps_size
         self.punish_value = 0
+        
         if env_steps_size > 0:  # used for training dataset
             self.start_step = random.randint(
                 self.lookback_window_size, self.df_total_steps - env_steps_size)
@@ -219,10 +220,9 @@ class CustomEnv(Env):
             return 0 - self.punish_value
 
     # render environment
-    def render(self, visualize=False):
+    def render(self, visualize=False,is_last_step = False):
         #print(f'Step: {self.current_step}, Net Worth: {self.net_worth}')
         if visualize:
             # Render the environment to the screen (inside utils.py file)
-            img = self.visualization.render(
-                self.df.loc[self.current_step], self.net_worth, self.trades)
-            return img
+            self.visualization.render(self.df.loc[self.current_step], self.net_worth, self.trades , is_last_step)
+            
